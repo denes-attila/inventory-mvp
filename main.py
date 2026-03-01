@@ -1,4 +1,7 @@
 from inventory import InventoryManager
+from database import initialize_db
+
+initialize_db()
 
 inventory = InventoryManager()
 
@@ -59,3 +62,4 @@ while chosen_task != 0:
         message = inventory.delete_member(int(input("Give the id for deleting member: ")))
         print(f"--->{message}")
         inventory.save()
+inventory.conn.close()

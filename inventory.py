@@ -1,11 +1,17 @@
 from staff import Staff
 from device import Device
 import json
+import sqlite3
+
+
+
 
 class InventoryManager:
     def __init__(self):
         self.devices_list = []
         self.staffs_list = []
+        self.conn = sqlite3.connect("inventory.db")
+        self.cursor = self.conn.cursor()
 
     def add_member(self):
         new_member = Staff(int(input("Id: ")), input("Name: " ), input("Role: "))
@@ -64,30 +70,39 @@ class InventoryManager:
         return [d for d in self.devices_list if d.device_assigned_to == staff]
 
     def save(self):
-        data = {
-            "staffs":[staff.to_dict() for staff in self.staffs_list],
-            "devices":[device.to_dict() for device in self.devices_list]
-        }
-        with open("inventory.json", "w") as f:
-            json.dump(data, f)
+        self.cursor.execute(''' DELETE FROM staffs ''')
+        self.cursor.execute(''' DELETE FROM devices '''
+        )
+        for staff in self.staffs_list:
+            self.cursor.execute("""
+            INSERT INTO staffs (id, name, role) VALUES (?,?,?)
+        """, (staff.staff_id, staff.staff_name, staff.role))
+        for device in self.devices_list:
+            self.cursor.execute("""
+            INSERT INTO devices (id, name, type, status, assigned_to) VALUES (?,?,?,?,?)
+        """, (device.device_id, device.device_name, device.device_type, device.device_status, device.device_assigned_to.staff_id if device.device_assigned_to else None))
+            
+        self.conn.commit()
+        
 
     def load(self):
         self.staffs_list = []
         self.devices_list = []
         try:
-            with open("inventory.json") as json_file:
-                items = json.load(json_file)
-                self.staffs_list = [Staff(item["id"], item["name"], item["role"]) for item in  items["staffs"]]
-                for item in items["devices"]:
-                    d = Device(item["id"], item["name"], item["type"])
-                    d.device_status = item["status"]
-                    staff_id = item["assigned_to"]
-                    if staff_id:
-                        d.device_assigned_to = next((s for s in self.staffs_list if s.staff_id == staff_id), None)
-                    self.devices_list.append(d)
-        except FileNotFoundError:
-            pass
+            self.cursor.execute("""SELECT * FROM staffs""")
+            rows = self.cursor.fetchall()
+            self.staffs_list = [Staff(row[0], row[1], row[2]) for row in  rows]
 
-        except json.JSONDecodeError:
-            pass
+            self.cursor.execute("""SELECT * FROM devices""")
+            d_rows = self.cursor.fetchall()
+            for row in d_rows:
+                d = Device(row[0], row[1], row[2])
+                d.device_status = row[3]
+                staff_id = row[4]
+                if staff_id:
+                    d.device_assigned_to = next((s for s in self.staffs_list if s.staff_id == staff_id), None)
+                self.devices_list.append(d)
 
+            
+        except Exception as e:
+            print(f"Hiba {e}")
